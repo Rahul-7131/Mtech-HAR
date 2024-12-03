@@ -1,0 +1,201 @@
+
+def adaptiveheuristicFn(state,goal, prev_move=None, barriers=None):
+    """
+    Adaptive heuristic function to calculate the cost based on dynamic factors.
+    
+    Parameters:
+    x1, y1: Current position of the agent.
+    x2, y2: Target position (green zone).
+    prev_move: Previous move direction ('left', 'right', 'up', 'down').
+    barriers: List of blocked positions on the grid [(x, y), ...]
+
+    Returns:
+    Heuristic cost that adapts based on direction, penalty for repeated moves,
+    and avoidance of barriers.
+    """
+    # Define movement costs and coordinates
+    x1,y1 = state
+    x2,y2 = goal
+    cost_left = 1
+    cost_right = 8
+    cost_up = 1
+    cost_down = 10
+    penalty = 5
+
+    # Manhattan distance to target
+    x_dist = abs(x1 - x2)
+    y_dist = abs(y1 - y2)
+
+    # Estimate movement costs
+    if x1 > x2:
+        x_cost = x_dist * cost_left  # Moving left
+    else:
+        x_cost = x_dist * cost_right  # Moving right
+
+    if y1 > y2:
+        y_cost = y_dist * cost_up  # Moving up
+    else:
+        y_cost = y_dist * cost_down  # Moving down
+
+    # Base heuristic: take a weighted sum of both distances, but bias towards minimizing high-cost moves
+    heuristic_cost = (x_cost + y_cost)
+
+    # Penalty for repeated moves in the same direction
+    if prev_move:
+        if prev_move == 'left' and x1 > x2:
+            heuristic_cost += penalty
+        elif prev_move == 'right' and x1 < x2:
+            heuristic_cost += penalty
+        elif prev_move == 'up' and y1 > y2:
+            heuristic_cost += penalty
+        elif prev_move == 'down' and y1 < y2:
+            heuristic_cost += penalty
+
+    # Barriers: If there are any blocked paths, add a large penalty to heuristic to avoid them
+    if barriers and (x1, y1) in barriers:
+        heuristic_cost += 100  # Large cost for blocked paths
+
+    return heuristic_cost
+
+import math
+
+def refinedheuristicFn(state,goal, prev_move=None, move_history=None, barriers=None):
+    """
+    Refined heuristic to calculate adaptive cost, incorporating penalties, Euclidean distance,
+    proximity-aware weights, and barrier-aware detouring.
+    
+    Parameters:
+    x1, y1: Current position of the agent.
+    x2, y2: Target position (green zone).
+    prev_move: Previous move direction ('left', 'right', 'up', 'down').
+    move_history: List of previous moves to accumulate penalty for repeated moves.
+    barriers: List of blocked positions on the grid [(x, y), ...]
+
+    Returns:
+    Refined heuristic cost.
+    """
+    # Define movement costs
+    x1,y1 = state
+    x2,y2 = goal
+    cost_left = 1
+    cost_right = 8
+    cost_up = 1
+    cost_down = 10
+    penalty = 5
+    repeated_penalty_growth = 2  # Penalty increases with each repeated move
+
+    # Step 1: Calculate Manhattan and Euclidean distances to target
+    x_dist = abs(x1 - x2)
+    y_dist = abs(y1 - y2)
+    
+    # Manhattan and Euclidean distances
+    manhattan_distance = x_dist + y_dist
+    euclidean_distance = math.sqrt(x_dist**2 + y_dist**2)
+
+    # Step 2: Estimate movement costs with directional bias
+    if x1 > x2:
+        x_cost = x_dist * cost_left  # Moving left
+    else:
+        x_cost = x_dist * cost_right  # Moving right
+
+    if y1 > y2:
+        y_cost = y_dist * cost_up  # Moving up
+    else:
+        y_cost = y_dist * cost_down  # Moving down
+
+    # Use a weighted combination of Manhattan and Euclidean distances
+    # Adjust the balance dynamically based on proximity to the target
+    distance_to_target = (0.6 * manhattan_distance + 0.4 * euclidean_distance)
+
+    # Base heuristic is the sum of weighted directional costs and distance estimate
+    heuristic_cost = x_cost + y_cost + distance_to_target
+
+    # Step 3: Apply dynamic penalties for repeated moves
+    if move_history and len(move_history) > 1:
+        consecutive_repeats = sum(1 for i in range(1, len(move_history)) if move_history[i] == move_history[i-1])
+        heuristic_cost += penalty + (consecutive_repeats * repeated_penalty_growth)
+
+    # Step 4: Apply barrier avoidance strategy
+    if barriers and (x1, y1) in barriers:
+        # Estimate how much detour is needed and apply a proportional penalty
+        detour_penalty = 50  # Base penalty for hitting a barrier
+        nearby_openings = [(x1 + dx, y1 + dy) for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)] if (x1 + dx, y1 + dy) not in barriers]
+        if not nearby_openings:
+            # Heavy penalty if no nearby openings to detour
+            heuristic_cost += detour_penalty * 2
+        else:
+            heuristic_cost += detour_penalty
+
+    return heuristic_cost
+
+
+
+'''def heuristicFn(state,goal, prev_move=None, move_history=None, barriers=None):
+    """
+    Refined heuristic to calculate adaptive cost, incorporating penalties, Euclidean distance,
+    proximity-aware weights, and barrier-aware detouring.
+    
+    Parameters:
+    x1, y1: Current position of the agent.
+    x2, y2: Target position (green zone).
+    prev_move: Previous move direction ('left', 'right', 'up', 'down').
+    move_history: List of previous moves to accumulate penalty for repeated moves.
+    barriers: List of blocked positions on the grid [(x, y), ...]
+
+    Returns:
+    Refined heuristic cost.
+    """
+    # Define movement costs
+    x1,y1 = state
+    x2,y2 = goal
+    cost_left = 1
+    cost_right = 8
+    cost_up = 1
+    cost_down = 10
+    penalty = 5
+    repeated_penalty_growth = 2  # Penalty increases with each repeated move
+
+    # Step 1: Calculate Manhattan and Euclidean distances to target
+    x_dist = abs(x1 - x2)
+    y_dist = abs(y1 - y2)
+    
+    # Manhattan and Euclidean distances
+    manhattan_distance = x_dist + y_dist
+    euclidean_distance = math.sqrt(x_dist**2 + y_dist**2)
+
+    # Step 2: Estimate movement costs with directional bias
+    if x1 > x2:
+        x_cost = x_dist * cost_left  # Moving left
+    else:
+        x_cost = x_dist * cost_right  # Moving right
+
+    if y1 > y2:
+        y_cost = y_dist * cost_up  # Moving up
+    else:
+        y_cost = y_dist * cost_down  # Moving down
+
+    # Use a weighted combination of Manhattan and Euclidean distances
+    # Adjust the balance dynamically based on proximity to the target
+    distance_to_target = (0.6 * manhattan_distance + 0.4 * euclidean_distance)
+
+    # Base heuristic is the sum of weighted directional costs and distance estimate
+    heuristic_cost = x_cost + y_cost + distance_to_target
+
+    # Step 3: Apply dynamic penalties for repeated moves
+    if move_history and len(move_history) > 1:
+        consecutive_repeats = sum(1 for i in range(1, len(move_history)) if move_history[i] == move_history[i-1])
+        heuristic_cost += penalty + (consecutive_repeats * repeated_penalty_growth)
+
+    # Step 4: Apply barrier avoidance strategy
+    if barriers and (x1, y1) in barriers:
+        # Estimate how much detour is needed and apply a proportional penalty
+        detour_penalty = 50  # Base penalty for hitting a barrier
+        nearby_openings = [(x1 + dx, y1 + dy) for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)] if (x1 + dx, y1 + dy) not in barriers]
+        if not nearby_openings:
+            # Heavy penalty if no nearby openings to detour
+            heuristic_cost += detour_penalty * 2
+        else:
+            heuristic_cost += detour_penalty
+
+    return heuristic_cost
+'''
