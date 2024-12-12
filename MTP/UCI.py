@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torchsummary import summary
 from torch.utils.data import DataLoader, TensorDataset
-from correction import time_series_to_spectrogram, PyramidAttentionModel  # Use the updated correction.py
+from MTP.UCI_model import time_series_to_spectrogram, PyramidAttentionModel  # Use the updated correction.py
 
 # Load datasets
 X_train_path = "/home/rahul/ML-Mtech/HAR/UCI HAR Dataset/UCI HAR Dataset/train/X_train.txt"

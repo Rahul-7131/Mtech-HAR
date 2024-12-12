@@ -3,10 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import librosa
-from dct import multi_frequency_compression, channel_attention  
+from dct_old import multi_frequency_compression, channel_attention  
 
 # Function to convert time-series data to spectrogram
-def time_series_to_spectrogram(time_series, sample_rate=50, n_fft=256, hop_length=128):
+def time_series_to_spectrogram(time_series, sample_rate=50, n_fft=28, hop_length=128):
     time_series = np.array(time_series, dtype=np.float32) 
     spectrogram = librosa.stft(time_series, n_fft=n_fft, hop_length=hop_length)
     spectrogram = np.abs(spectrogram)
