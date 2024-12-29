@@ -1,10 +1,11 @@
 import numpy as np
 import torch
+import optuna
 import torch.nn as nn
 import torch.optim as optim
 from torchsummary import summary
 from torch.utils.data import DataLoader, TensorDataset
-from MTP.UCI_model import time_series_to_spectrogram, PyramidAttentionModel  # Use the updated correction.py
+from UCI_model import time_series_to_spectrogram, PyramidAttentionModel  # Use the updated correction.py
 
 # Load datasets
 X_train_path = "/home/rahul/ML-Mtech/HAR/UCI HAR Dataset/UCI HAR Dataset/train/X_train.txt"
@@ -17,7 +18,7 @@ y_train = np.loadtxt(y_train_path, dtype=int)
 X_test = np.loadtxt(X_test_path)
 y_test = np.loadtxt(y_test_path, dtype=int)
 
-subset_ratio = 0.2
+subset_ratio = 0.001
 subset_size = int(len(X_train) * subset_ratio)
 X_train = X_train[:subset_size]
 y_train = y_train[:subset_size]
@@ -49,13 +50,81 @@ test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 # Set up device and model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Running on {device}")
+
+# Global variable to keep track of the run number
+run_number = 1
+
+def objective(trial):
+    global run_number  # Declare the global variable
+    
+    # Hyperparameter search space
+    lr = trial.suggest_loguniform("lr", 1e-4, 1e-2)
+    batch_size = trial.suggest_categorical("batch_size", [8, 16, 32, 64])
+    weight_decay = trial.suggest_loguniform("weight_decay", 1e-6, 1e-2)
+    
+    # Update DataLoader with trial batch_size
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    
+    # Define model, loss, optimizer
+    model = PyramidAttentionModel(input_channels=1, n_classes=6).to(device)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    
+    # Training loop
+    num_epochs = 5
+    for epoch in range(num_epochs):
+        model.train()
+        running_loss = 0.0
+        print(f"running epoch number:{epoch+1}")
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            gap_outputs, dct_outputs = model(inputs)
+            loss_gap = criterion(gap_outputs, labels)
+            loss_dct = criterion(dct_outputs, labels)
+            loss = loss_gap + 2.5 * loss_dct
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item()
+            
+    # Evaluation
+    model.eval()
+    
+    print(f"run number: {run_number}")
+    correct_gap, total = 0, 0
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            gap_outputs, _ = model(inputs)
+            _, predicted_gap = torch.max(gap_outputs, 1)
+            total += labels.size(0)
+            correct_gap += (predicted_gap == labels).sum().item()
+    
+    # Increment the run number for the next trial
+    run_number += 1
+    
+    # Return accuracy for optimization
+    accuracy = 100 * correct_gap / total
+    print("finished Nas search")
+    return accuracy
+
+study = optuna.create_study(direction="maximize")
+study.optimize(objective, n_trials=20)
+
+# Print the best hyperparameters
+print("Best hyperparameters: ", study.best_params)
+best_params = study.best_params
+
+# Use best_params['lr'], best_params['batch_size'], and best_params['weight_decay']
+train_loader = DataLoader(train_dataset, batch_size=best_params["batch_size"], shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=best_params["batch_size"], shuffle=False)
+
 model = PyramidAttentionModel(input_channels=1, n_classes=6).to(device)
-# Check model summary
-#summary(model, (1, 129, 8))  # Adjusted input shape after padding
+optimizer = optim.Adam(model.parameters(), lr=best_params["lr"], weight_decay=best_params["weight_decay"])
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)  # Reduce LR every 5 epochs
 
 # Training loop
