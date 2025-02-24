@@ -16,31 +16,42 @@ def time_series_to_spectrogram(time_series, sample_rate=50, n_fft=256, hop_lengt
 class PyramidMultiScaleCNN(nn.Module):
     def __init__(self, input_channels):
         super(PyramidMultiScaleCNN, self).__init__()
-        self.conv3x3 = nn.Conv2d(input_channels, 64, kernel_size=3, padding=1)
-        self.conv5x5 = nn.Conv2d(64 + input_channels, 128, kernel_size=5, padding=2)
-        self.conv7x7 = nn.Conv2d(128 + input_channels, 256, kernel_size=7, padding=3)
 
-        self.branch2_conv3x3 = nn.Conv2d(input_channels, 64, kernel_size=3, padding=1)
-        self.branch2_conv5x5 = nn.Conv2d(64 + input_channels, 128, kernel_size=5, padding=2)
-        self.branch2_conv7x7 = nn.Conv2d(128 + input_channels, 256, kernel_size=7, padding=3)
+        # Shared layers
+        self.conv3x3 = nn.Sequential(
+            nn.Conv2d(input_channels, input_channels, kernel_size=3, padding=1, groups=input_channels),
+            nn.Conv2d(input_channels, 32, kernel_size=1)
+        )
+        self.conv5x5 = nn.Sequential(
+            nn.Conv2d(32, 32, kernel_size=5, padding=2, groups=32),
+            nn.Conv2d(32, 64, kernel_size=1)
+        )
+        self.conv7x7 = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=7, padding=3, groups=64),
+            nn.Conv2d(64, 128, kernel_size=1)
+        )
 
     def forward(self, x):
         # First branch
         branch1_x3x3 = F.relu(self.conv3x3(x))  # Output of 3x3
         branch1_x = torch.cat([branch1_x3x3, x], dim=1)  # Concatenate with input
+        branch1_x = branch1_x[:, :32, :, :]  # Keep only first 32 channels
         branch1_x5x5 = F.relu(self.conv5x5(branch1_x))  # Output of 5x5
         branch1_x = torch.cat([branch1_x5x5, x], dim=1)  # Concatenate with input
+        branch1_x = branch1_x[:, :64, :, :]  # Keep only first 64 channels
         branch1_x7x7 = F.relu(self.conv7x7(branch1_x))  # Output of 7x7
         
         # Concatenate outputs of all three layers for branch 1
         branch1_output = torch.cat([branch1_x3x3, branch1_x5x5, branch1_x7x7], dim=1)
 
-        # Second branch
-        branch2_x3x3 = F.relu(self.branch2_conv3x3(x))  # Output of 3x3
+        # Second branch (reuse same layers)
+        branch2_x3x3 = F.relu(self.conv3x3(x))  # Output of 3x3
         branch2_x = torch.cat([branch2_x3x3, x], dim=1)  # Concatenate with input
-        branch2_x5x5 = F.relu(self.branch2_conv5x5(branch2_x))  # Output of 5x5
+        branch2_x = branch2_x[:, :32, :, :]  # Keep only first 32 channels
+        branch2_x5x5 = F.relu(self.conv5x5(branch2_x))  # Output of 5x5
         branch2_x = torch.cat([branch2_x5x5, x], dim=1)  # Concatenate with input
-        branch2_x7x7 = F.relu(self.branch2_conv7x7(branch2_x))  # Output of 7x7
+        branch2_x = branch2_x[:, :64, :, :]  # Keep only first 64 channels
+        branch2_x7x7 = F.relu(self.conv7x7(branch2_x))  # Output of 7x7
         
         # Concatenate outputs of all three layers for branch 2
         branch2_output = torch.cat([branch2_x3x3, branch2_x5x5, branch2_x7x7], dim=1)
@@ -49,6 +60,7 @@ class PyramidMultiScaleCNN(nn.Module):
         final_output = torch.cat([branch1_output, branch2_output], dim=1)
 
         return final_output
+
 
 class PyramidAttentionModel(nn.Module):
     def __init__(self, input_channels, n_classes, num_splits):
@@ -71,7 +83,7 @@ class PyramidAttentionModel(nn.Module):
         self.max_u = 5  # Maximum frequency component along height
         self.max_v = 5  # Maximum frequency component along width
         
-        feature_size = int((self.num_splits/2)*1792)
+        feature_size = int((self.num_splits/2)*1792/2)
         # Final classification layers for both branches
         self.classifier_gap = nn.Linear(feature_size, n_classes)
         self.classifier_dct = nn.Linear(input_channels, n_classes)  # Placeholder value

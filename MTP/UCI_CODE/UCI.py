@@ -7,13 +7,13 @@ import torch.nn as nn
 import torch.optim as optim
 from torchsummary import summary
 from torch.utils.data import DataLoader, TensorDataset
-from correction import time_series_to_spectrogram, PyramidAttentionModel  # Use the updated correction.py
+from UCI_model import time_series_to_spectrogram, PyramidAttentionModel  # Use the updated correction.py
 
 # Load datasets
-X_train_path = "/scratch/data/avinash1/UCI-HAR/UCI HAR Dataset/UCI HAR Dataset/train/X_train.txt"
-y_train_path = "/scratch/data/avinash1/UCI-HAR/UCI HAR Dataset/UCI HAR Dataset/train/y_train.txt"
-X_test_path = "/scratch/data/avinash1/UCI-HAR/UCI HAR Dataset/UCI HAR Dataset/test/X_test.txt"
-y_test_path = "/scratch/data/avinash1/UCI-HAR/UCI HAR Dataset/UCI HAR Dataset/test/y_test.txt"
+X_train_path = "/home/rahul/ML-Mtech/HAR/UCI HAR Dataset/UCI HAR Dataset/train/X_train.txt"
+y_train_path = "/home/rahul/ML-Mtech/HAR/UCI HAR Dataset/UCI HAR Dataset/train/y_train.txt"
+X_test_path = "/home/rahul/ML-Mtech/HAR/UCI HAR Dataset/UCI HAR Dataset/test/X_test.txt"
+y_test_path = "/home/rahul/ML-Mtech/HAR/UCI HAR Dataset/UCI HAR Dataset/test/y_test.txt"
 
 X_train = np.loadtxt(X_train_path)
 y_train = np.loadtxt(y_train_path, dtype=int)
@@ -50,7 +50,7 @@ print(f"Running on {device}")
 
 # Global variable to keep track of the run number
 run_number = 1
-
+'''
 def objective(trial):
     global run_number  # Declare the global variable
     
@@ -69,7 +69,7 @@ def objective(trial):
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     
     # Training loop
-    num_epochs = 20
+    num_epochs = 1
     for epoch in range(num_epochs):
         model.train()
         running_loss = 0.0
@@ -105,25 +105,30 @@ def objective(trial):
     return accuracy
 
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=20)
+study.optimize(objective, n_trials=1)
 print("NAS completed")
 # Print the best hyperparameters
 print("Best hyperparameters: ", study.best_params)
-
-best_params = study.best_params
+'''
+best_params = {'lr': 0.0006514665039242046, 'batch_size': 8, 'weight_decay': 6.2971697679204035e-06}
 
 # Use best_params['lr'], best_params['batch_size'], and best_params['weight_decay']
 train_loader = DataLoader(train_dataset, batch_size=best_params["batch_size"], shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=best_params["batch_size"], shuffle=False)
 
-model = PyramidAttentionModel(input_channels=1, n_classes=6, num_splits=12).to(device)
+model = PyramidAttentionModel(input_channels=1, n_classes=6, num_splits=2).to(device)
 optimizer = optim.Adam(model.parameters(), lr=best_params["lr"], weight_decay=best_params["weight_decay"])
+
+# Print model summary and number of parameters
+summary(model, input_size=(1, 129, 8))
+total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print(f"Total number of trainable parameters: {total_params}")
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
 
 # Training loop
-num_epochs = 50
+num_epochs = 1
 print("Training loop started")
 for epoch in range(num_epochs):
     model.train()
