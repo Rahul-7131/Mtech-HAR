@@ -2,3 +2,6 @@ torch
 numpy
 librosa
 optuna
+scikit-learn
+pandas
+matplotlib
